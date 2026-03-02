@@ -1,0 +1,94 @@
+{
+  "dry_run": true,
+  "log_level": "info",
+  "interval": 30000000000,
+
+  "kubernetes": {
+    "enabled": false,
+    "kubeconfig": "",
+    "namespaces": ["default", "staging"],
+    "label_selectors": ["app=my-service"],
+    "actions": ["kill_pod", "scale_down"],
+    "max_targets": 1,
+    "grace_period_seconds": 30,
+    "excluded_pods": ["kube-system", "monitoring"]
+  },
+
+  "http": {
+    "enabled": true,
+    "targets": [
+      {
+        "name": "api-flood",
+        "url": "http://localhost:8080/api/health",
+        "method": "GET",
+        "headers": {
+          "Authorization": "Bearer test-token"
+        },
+        "concurrency": 10,
+        "total_requests": 1000,
+        "rate_per_second": 100,
+        "timeout_seconds": 5,
+        "duration": 60000000000
+      },
+      {
+        "name": "payload-mutation",
+        "url": "http://localhost:8080/api/data",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "concurrency": 5,
+        "total_requests": 500,
+        "rate_per_second": 50,
+        "timeout_seconds": 10,
+        "randomize_body": true,
+        "body_size_bytes": 4096
+      }
+    ]
+  },
+
+  "mq": {
+    "enabled": true,
+    "backends": [
+      {
+        "name": "rabbitmq-chaos",
+        "type": "rabbitmq",
+        "broker_url": "amqp://guest:guest@localhost:5672/",
+        "queue": "chaos-test-queue",
+        "message_count": 1000,
+        "message_size": 512,
+        "concurrency": 5,
+        "rate_per_sec": 200,
+        "random_payload": true
+      },
+      {
+        "name": "kafka-chaos",
+        "type": "kafka",
+        "broker_url": "localhost:9092",
+        "topic": "chaos-test-topic",
+        "message_count": 500,
+        "message_size": 1024,
+        "concurrency": 3,
+        "rate_per_sec": 100,
+        "payload_pattern": "{\"chaos\": true, \"timestamp\": \"NOW\"}"
+      },
+      {
+        "name": "nats-chaos",
+        "type": "nats",
+        "broker_url": "nats://localhost:4222",
+        "topic": "chaos.test",
+        "message_count": 2000,
+        "message_size": 256,
+        "concurrency": 10,
+        "rate_per_sec": 500,
+        "random_payload": true
+      }
+    ]
+  },
+
+  "scheduler": {
+    "mode": "once",
+    "max_experiments": 0
+  }
+}
+

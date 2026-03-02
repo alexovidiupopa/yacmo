@@ -1,0 +1,193 @@
+{
+  "dry_run": true,
+  "log_level": "info",
+  "interval": 30000000000,
+
+  "kubernetes": {
+    "enabled": true,
+    "kubeconfig": "",
+    "namespaces": ["default", "staging"],
+    "label_selectors": ["app=my-service"],
+    "actions": ["kill_pod", "scale_down"],
+    "max_targets": 1,
+    "grace_period_seconds": 30,
+    "excluded_pods": ["kube-system", "monitoring"]
+  },
+
+  "http": {
+    "enabled": true,
+    "targets": [
+      {
+        "name": "api-flood",
+        "url": "http://localhost:8080/api/health",
+        "method": "GET",
+        "headers": {
+          "Authorization": "Bearer test-token"
+        },
+        "concurrency": 10,
+        "total_requests": 1000,
+        "rate_per_second": 100,
+        "timeout_seconds": 5,
+        "duration": 60000000000
+      },
+      {
+        "name": "payload-mutation",
+        "url": "http://localhost:8080/api/data",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "concurrency": 5,
+        "total_requests": 500,
+        "rate_per_second": 50,
+        "timeout_seconds": 10,
+        "randomize_body": true,
+        "body_size_bytes": 4096
+      }
+    ]
+  },
+
+  "grpc": {
+    "enabled": false,
+    "targets": [
+      {
+        "name": "grpc-service-flood",
+        "address": "localhost:50051",
+        "method": "/mypackage.MyService/MyMethod",
+        "insecure": true,
+        "metadata": {
+          "authorization": "Bearer grpc-token"
+        },
+        "payload": "{\"id\": 1}",
+        "concurrency": 8,
+        "total_requests": 500,
+        "rate_per_second": 100,
+        "duration": 30000000000
+      }
+    ]
+  },
+
+  "mq": {
+    "enabled": true,
+    "backends": [
+      {
+        "name": "rabbitmq-chaos",
+        "type": "rabbitmq",
+        "broker_url": "amqp://guest:guest@localhost:5672/",
+        "queue": "chaos-test-queue",
+        "message_count": 1000,
+        "message_size": 512,
+        "concurrency": 5,
+        "rate_per_sec": 200,
+        "random_payload": true
+      },
+      {
+        "name": "kafka-chaos",
+        "type": "kafka",
+        "broker_url": "localhost:9092",
+        "topic": "chaos-test-topic",
+        "message_count": 500,
+        "message_size": 1024,
+        "concurrency": 3,
+        "rate_per_sec": 100,
+        "payload_pattern": "{\"chaos\": true, \"timestamp\": \"NOW\"}"
+      },
+      {
+        "name": "nats-chaos",
+        "type": "nats",
+        "broker_url": "nats://localhost:4222",
+        "topic": "chaos.test",
+        "message_count": 2000,
+        "message_size": 256,
+        "concurrency": 10,
+        "rate_per_sec": 500,
+        "random_payload": true
+      }
+    ]
+  },
+
+  "network": {
+    "enabled": false,
+    "interface": "eth0",
+    "actions": ["latency", "packet_loss"],
+    "latency_ms": 200,
+    "jitter_ms": 50,
+    "packet_loss_percent": 10.0,
+    "corrupt_percent": 2.0,
+    "bandwidth_limit_kbps": 512,
+    "duration": 60000000000
+  },
+
+  "stress": {
+    "enabled": false,
+    "actions": ["cpu", "memory"],
+    "duration": 30000000000,
+    "cpu_cores": 2,
+    "memory_mb": 512,
+    "disk_io_workers": 4,
+    "temp_dir": "/tmp/yacmo",
+    "disk_fill_mb": 1024
+  },
+
+  "scheduler": {
+    "mode": "once",
+    "cron_expression": "",
+    "max_experiments": 0
+  },
+
+  "metrics": {
+    "enabled": true,
+    "address": ":9090"
+  },
+
+  "report": {
+    "enabled": true,
+    "output_dir": "./reports"
+  },
+
+  "notify": {
+    "enabled": false,
+    "webhooks": [
+      {
+        "name": "slack-alerts",
+        "type": "slack",
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "headers": {}
+      },
+      {
+        "name": "discord-alerts",
+        "type": "discord",
+        "url": "https://discord.com/api/webhooks/YOUR/DISCORD/WEBHOOK",
+        "headers": {}
+      },
+      {
+        "name": "custom-webhook",
+        "type": "generic",
+        "url": "https://your-service.example.com/chaos-events",
+        "headers": {
+          "X-API-Key": "your-api-key"
+        }
+      }
+    ]
+  },
+
+  "healthcheck": {
+    "enabled": true,
+    "timeout_seconds": 5,
+    "endpoints": [
+      {
+        "name": "api-health",
+        "url": "http://localhost:8080/healthz",
+        "method": "GET",
+        "expected_status": 200
+      },
+      {
+        "name": "frontend",
+        "url": "http://localhost:3000/",
+        "method": "HEAD",
+        "expected_status": 200
+      }
+    ]
+  }
+}
+
