@@ -1,0 +1,76 @@
+{
+  "dry_run": false,
+  "log_level": "info",
+  "interval": 30000000000,
+
+  "mq": {
+    "enabled": true,
+    "backends": [
+      {
+        "name": "rabbitmq-chaos",
+        "type": "rabbitmq",
+        "broker_url": "amqp://guest:guest@localhost:5672/",
+        "queue": "chaos-test-queue",
+        "message_count": 1000,
+        "message_size": 512,
+        "concurrency": 5,
+        "rate_per_sec": 200,
+        "random_payload": true
+      },
+      {
+        "name": "kafka-chaos",
+        "type": "kafka",
+        "broker_url": "localhost:9092",
+        "topic": "chaos-test-topic",
+        "message_count": 500,
+        "message_size": 1024,
+        "concurrency": 3,
+        "rate_per_sec": 100,
+        "payload_pattern": "{\"chaos\": true, \"timestamp\": \"NOW\"}"
+      }
+    ]
+  },
+
+  "scheduler": {
+    "mode": "continuous",
+    "cron_expression": "",
+    "max_experiments": 0
+  },
+
+  "metrics": {
+    "enabled": true,
+    "address": ":9090"
+  },
+
+  "report": {
+    "enabled": true,
+    "output_dir": "./reports"
+  },
+
+  "notify": {
+    "enabled": false,
+    "webhooks": [
+      {
+        "name": "slack-alerts",
+        "type": "slack",
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "headers": {}
+      },
+      {
+        "name": "discord-alerts",
+        "type": "discord",
+        "url": "https://discord.com/api/webhooks/YOUR/DISCORD/WEBHOOK",
+        "headers": {}
+      },
+      {
+        "name": "custom-webhook",
+        "type": "generic",
+        "url": "https://your-service.example.com/chaos-events",
+        "headers": {
+          "X-API-Key": "your-api-key"
+        }
+      }
+    ]
+  }
+}
+

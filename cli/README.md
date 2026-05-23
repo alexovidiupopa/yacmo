@@ -250,7 +250,7 @@ cp config.example.json config.json
 
 ## Configuration Reference
 
-See [`config.example.json`](config.example.json) for a complete example.
+See [`config.example.json`](config_examples/config-dry-run.json) for a complete example.
 
 All durations are in nanoseconds in JSON (Go's `time.Duration` encoding).
 Common values: `30s = 30000000000`, `1m = 60000000000`, `5m = 300000000000`.

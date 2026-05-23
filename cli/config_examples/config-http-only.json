@@ -1,0 +1,60 @@
+{
+  "dry_run": false,
+  "log_level": "info",
+  "interval": 30000000000,
+
+  "http": {
+    "enabled": true,
+    "targets": [
+      {
+        "name": "api-flood",
+        "url": "http://localhost:8080/api/health",
+        "method": "GET",
+        "headers": {
+          "Authorization": "Bearer test-token"
+        },
+        "concurrency": 10,
+        "total_requests": 1000,
+        "rate_per_second": 100,
+        "timeout_seconds": 5,
+        "duration": 60000000000
+      }
+    ]
+  },
+
+  "scheduler": {
+    "mode": "once",
+    "cron_expression": "",
+    "max_experiments": 0
+  },
+
+  "metrics": {
+    "enabled": true,
+    "address": ":9090"
+  },
+
+  "report": {
+    "enabled": true,
+    "output_dir": "./reports"
+  },
+
+  "healthcheck": {
+    "enabled": false,
+    "timeout_seconds": 5,
+    "endpoints": [
+      {
+        "name": "api-health",
+        "url": "http://localhost:8080/healthz",
+        "method": "GET",
+        "expected_status": 200
+      },
+      {
+        "name": "frontend",
+        "url": "http://localhost:3000/",
+        "method": "HEAD",
+        "expected_status": 200
+      }
+    ]
+  }
+}
+

@@ -1,10 +1,10 @@
 {
-  "dry_run": true,
+  "dry_run": false,
   "log_level": "info",
   "interval": 30000000000,
 
   "kubernetes": {
-    "enabled": true,
+    "enabled": false,
     "kubeconfig": "",
     "namespaces": ["default", "staging"],
     "label_selectors": ["app=my-service"],
@@ -15,7 +15,7 @@
   },
 
   "http": {
-    "enabled": true,
+    "enabled": false,
     "targets": [
       {
         "name": "api-flood",
@@ -48,7 +48,7 @@
   },
 
   "grpc": {
-    "enabled": false,
+    "enabled": true,
     "targets": [
       {
         "name": "grpc-service-flood",
@@ -68,7 +68,7 @@
   },
 
   "mq": {
-    "enabled": true,
+    "enabled": false,
     "backends": [
       {
         "name": "rabbitmq-chaos",

@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "generated_at": "2026-06-07T11:23:20.8936182+03:00",
+  "dry_run": true,
+  "total_duration": "16.3991ms",
+  "summary": {
+    "total": 2,
+    "succeeded": 0,
+    "failed": 0,
+    "skipped": 2
+  },
+  "experiments": [
+    {
+      "name": "http-flood[targets=api-flood,payload-mutation]",
+      "status": "skipped",
+      "started_at": "2026-06-07T11:23:20.8907513+03:00",
+      "duration": "0s",
+      "details": "dry-run: skipped"
+    },
+    {
+      "name": "mq-flood[backends=rabbitmq-chaos(rabbitmq),kafka-chaos(kafka),nats-chaos(nats)]",
+      "status": "skipped",
+      "started_at": "2026-06-07T11:23:20.8907513+03:00",
+      "duration": "0s",
+      "details": "dry-run: skipped"
+    }
+  ]
+}
