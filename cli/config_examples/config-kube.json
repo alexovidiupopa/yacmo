@@ -1,0 +1,78 @@
+{
+  "dry_run": false,
+  "log_level": "info",
+  "interval": 30000000000,
+
+  "kubernetes": {
+    "enabled": true,
+    "kubeconfig": "/home/alex/.kube/config",
+    "namespaces": ["default"],
+    "label_selectors": ["app=go-service"],
+    "actions": ["kill_pod"],
+    "max_targets": 1,
+    "grace_period_seconds": 30,
+    "excluded_pods": ["kube-system", "monitoring"]
+  },
+
+  "scheduler": {
+    "mode": "once",
+    "cron_expression": "",
+    "max_experiments": 0
+  },
+
+  "metrics": {
+    "enabled": true,
+    "address": ":9090"
+  },
+
+  "report": {
+    "enabled": true,
+    "output_dir": "./reports"
+  },
+
+  "notify": {
+    "enabled": false,
+    "webhooks": [
+      {
+        "name": "slack-alerts",
+        "type": "slack",
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "headers": {}
+      },
+      {
+        "name": "discord-alerts",
+        "type": "discord",
+        "url": "https://discord.com/api/webhooks/YOUR/DISCORD/WEBHOOK",
+        "headers": {}
+      },
+      {
+        "name": "custom-webhook",
+        "type": "generic",
+        "url": "https://your-service.example.com/chaos-events",
+        "headers": {
+          "X-API-Key": "your-api-key"
+        }
+      }
+    ]
+  },
+
+  "healthcheck": {
+    "enabled": false,
+    "timeout_seconds": 5,
+    "endpoints": [
+      {
+        "name": "api-health",
+        "url": "http://localhost:8080/healthz",
+        "method": "GET",
+        "expected_status": 200
+      },
+      {
+        "name": "frontend",
+        "url": "http://localhost:3000/",
+        "method": "HEAD",
+        "expected_status": 200
+      }
+    ]
+  }
+}
+

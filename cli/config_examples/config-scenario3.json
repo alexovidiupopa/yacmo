@@ -1,0 +1,32 @@
+{
+  "dry_run": false,
+  "log_level": "info",
+  "interval": 30000000000,
+
+  "network": {
+    "enabled": true,
+    "interface": "eth0",
+    "actions": ["latency"],
+    "latency_ms": 200,
+    "jitter_ms": 50,
+    "duration": 20000000000
+  },
+
+  "scheduler": {
+    "mode": "once",
+    "cron_expression": "",
+    "max_experiments": 1
+  },
+
+  "metrics": {
+    "enabled": true,
+    "address": ":9090"
+  },
+
+  "report": {
+    "enabled": true,
+    "output_dir": "./reports"
+  }
+
+}
+

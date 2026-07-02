@@ -1,0 +1,59 @@
+{
+  "dry_run": false,
+  "log_level": "info",
+  "interval": 30000000000,
+
+  "stress": {
+    "enabled": true,
+    "actions": ["cpu", "memory"],
+    "duration": 30000000000,
+    "cpu_cores": 2,
+    "memory_mb": 512,
+    "disk_io_workers": 4,
+    "temp_dir": "/tmp/yacmo",
+    "disk_fill_mb": 1024
+  },
+
+  "scheduler": {
+    "mode": "continuous",
+    "cron_expression": "",
+    "max_experiments": 0
+  },
+
+  "metrics": {
+    "enabled": true,
+    "address": ":9090"
+  },
+
+  "report": {
+    "enabled": true,
+    "output_dir": "./reports"
+  },
+
+  "notify": {
+    "enabled": false,
+    "webhooks": [
+      {
+        "name": "slack-alerts",
+        "type": "slack",
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "headers": {}
+      },
+      {
+        "name": "discord-alerts",
+        "type": "discord",
+        "url": "https://discord.com/api/webhooks/YOUR/DISCORD/WEBHOOK",
+        "headers": {}
+      },
+      {
+        "name": "custom-webhook",
+        "type": "generic",
+        "url": "https://your-service.example.com/chaos-events",
+        "headers": {
+          "X-API-Key": "your-api-key"
+        }
+      }
+    ]
+  }
+}
+
