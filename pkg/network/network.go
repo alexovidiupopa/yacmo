@@ -13,12 +13,14 @@ import (
 
 	"yacmo/pkg/config"
 	"yacmo/pkg/logger"
+	"yacmo/pkg/safety"
 )
 
 // ChaosNetwork implements chaos.Experiment for network-level chaos.
 type ChaosNetwork struct {
 	cfg     config.NetworkConfig
 	log     *logger.Logger
+	policy  *safety.Policy
 	applied []rollbackCmd // commands to undo on rollback
 }
 
@@ -29,10 +31,11 @@ type rollbackCmd struct {
 }
 
 // New creates a new network chaos experiment.
-func New(cfg config.NetworkConfig, log *logger.Logger) *ChaosNetwork {
+func New(cfg config.NetworkConfig, policy *safety.Policy, log *logger.Logger) *ChaosNetwork {
 	return &ChaosNetwork{
-		cfg: cfg,
-		log: log,
+		cfg:    cfg,
+		log:    log,
+		policy: policy,
 	}
 }
 
@@ -57,22 +60,37 @@ func (c *ChaosNetwork) Run(ctx context.Context) error {
 
 		switch action {
 		case "latency":
+			if err := c.checkAction("latency"); err != nil {
+				return err
+			}
 			if err := c.injectLatency(ctx); err != nil {
 				return fmt.Errorf("latency injection: %w", err)
 			}
 		case "packet_loss":
+			if err := c.checkAction("packet_loss"); err != nil {
+				return err
+			}
 			if err := c.injectPacketLoss(ctx); err != nil {
 				return fmt.Errorf("packet loss: %w", err)
 			}
 		case "dns_failure":
+			if err := c.checkAction("dns_failure"); err != nil {
+				return err
+			}
 			if err := c.injectDNSFailure(ctx); err != nil {
 				return fmt.Errorf("dns failure: %w", err)
 			}
 		case "bandwidth_limit":
+			if err := c.checkAction("bandwidth_limit"); err != nil {
+				return err
+			}
 			if err := c.injectBandwidthLimit(ctx); err != nil {
 				return fmt.Errorf("bandwidth limit: %w", err)
 			}
 		case "corrupt":
+			if err := c.checkAction("corrupt"); err != nil {
+				return err
+			}
 			if err := c.injectCorruption(ctx); err != nil {
 				return fmt.Errorf("corruption: %w", err)
 			}
@@ -94,6 +112,11 @@ func (c *ChaosNetwork) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// DestructiveActionCount returns the number of destructive network actions configured.
+func (c *ChaosNetwork) DestructiveActionCount() int {
+	return len(c.cfg.Actions)
 }
 
 // Rollback undoes all applied network chaos rules.
@@ -244,6 +267,13 @@ func (c *ChaosNetwork) injectCorruption(ctx context.Context) error {
 		args:        []string{"qdisc", "del", "dev", iface, "root"},
 	})
 	return nil
+}
+
+func (c *ChaosNetwork) checkAction(action string) error {
+	if c.policy == nil {
+		return nil
+	}
+	return c.policy.CheckNetworkAction(action)
 }
 
 // runCmd executes a system command.

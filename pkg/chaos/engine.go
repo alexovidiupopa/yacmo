@@ -77,6 +77,13 @@ func (e *Engine) RunAll(ctx context.Context) []ExperimentResult {
 	copy(callbacks, e.callbacks)
 	e.mu.Unlock()
 
+	if e.cfg.Safety.Enabled && !e.cfg.DryRun && e.cfg.Safety.MaxDestructiveActionsPerRun > 0 {
+		if destructive := destructiveActionCount(experiments); destructive > e.cfg.Safety.MaxDestructiveActionsPerRun {
+			e.log.Error("Safety cap exceeded: %d destructive actions configured (max %d)", destructive, e.cfg.Safety.MaxDestructiveActionsPerRun)
+			return nil
+		}
+	}
+
 	var results []ExperimentResult
 
 	for _, exp := range experiments {
@@ -193,4 +200,18 @@ func (e *Engine) PrintSummary() {
 	e.log.Info("───────────────────────────────────────")
 	e.log.Info("  Total: %d | Passed: %d | Failed: %d", len(results), succeeded, failed)
 	e.log.Info("═══════════════════════════════════════")
+}
+
+type destructiveReporter interface {
+	DestructiveActionCount() int
+}
+
+func destructiveActionCount(experiments []Experiment) int {
+	total := 0
+	for _, exp := range experiments {
+		if reporter, ok := exp.(destructiveReporter); ok {
+			total += reporter.DestructiveActionCount()
+		}
+	}
+	return total
 }

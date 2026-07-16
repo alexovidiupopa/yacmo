@@ -16,20 +16,23 @@ import (
 
 	"yacmo/pkg/config"
 	"yacmo/pkg/logger"
+	"yacmo/pkg/safety"
 )
 
 // ChaosStress implements chaos.Experiment for resource stress testing.
 type ChaosStress struct {
 	cfg       config.StressConfig
 	log       *logger.Logger
+	policy    *safety.Policy
 	tempFiles []string // track files created for disk fill (for rollback)
 }
 
 // New creates a new stress chaos experiment.
-func New(cfg config.StressConfig, log *logger.Logger) *ChaosStress {
+func New(cfg config.StressConfig, policy *safety.Policy, log *logger.Logger) *ChaosStress {
 	return &ChaosStress{
-		cfg: cfg,
-		log: log,
+		cfg:    cfg,
+		log:    log,
+		policy: policy,
 	}
 }
 
@@ -55,24 +58,36 @@ func (c *ChaosStress) Run(ctx context.Context) error {
 	for _, action := range c.cfg.Actions {
 		switch action {
 		case "cpu":
+			if err := c.checkAction("cpu"); err != nil {
+				return err
+			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				errCh <- c.stressCPU(stressCtx)
 			}()
 		case "memory":
+			if err := c.checkAction("memory"); err != nil {
+				return err
+			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				errCh <- c.stressMemory(stressCtx)
 			}()
 		case "disk_io":
+			if err := c.checkAction("disk_io"); err != nil {
+				return err
+			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				errCh <- c.stressDiskIO(stressCtx)
 			}()
 		case "disk_fill":
+			if err := c.checkAction("disk_fill"); err != nil {
+				return err
+			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -96,6 +111,11 @@ func (c *ChaosStress) Run(ctx context.Context) error {
 		return fmt.Errorf("stress errors: %s", strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// DestructiveActionCount returns the number of destructive stress actions configured.
+func (c *ChaosStress) DestructiveActionCount() int {
+	return len(c.cfg.Actions)
 }
 
 // Rollback cleans up any resources created during stress (e.g., temp files).
@@ -272,4 +292,11 @@ func (c *ChaosStress) stressDiskFill(ctx context.Context) error {
 	<-ctx.Done()
 	c.log.Info("📀 Disk fill stress completed")
 	return nil
+}
+
+func (c *ChaosStress) checkAction(action string) error {
+	if c.policy == nil {
+		return nil
+	}
+	return c.policy.CheckStressAction(action)
 }

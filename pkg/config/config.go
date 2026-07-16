@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"time"
 )
 
@@ -47,6 +48,9 @@ type Config struct {
 
 	// Health check configuration
 	HealthCheck HealthCheckConfig `json:"healthcheck"`
+
+	// Safety configuration
+	Safety SafetyConfig `json:"safety"`
 }
 
 // KubernetesConfig holds settings for Kubernetes chaos experiments.
@@ -227,6 +231,21 @@ type SchedulerConfig struct {
 	MaxExperiments int `json:"max_experiments"`
 }
 
+// SafetyConfig controls safety guardrails for destructive experiments.
+type SafetyConfig struct {
+	Enabled                     bool     `json:"enabled"`
+	FailClosed                  bool     `json:"fail_closed"`
+	RequireApproval             bool     `json:"require_approval"`
+	InteractiveConfirm          bool     `json:"interactive_confirm"`
+	AllowDestructiveActions     bool     `json:"allow_destructive_actions"`
+	AllowedNamespaces           []string `json:"allowed_namespaces"`
+	BlockedNamespaces           []string `json:"blocked_namespaces"`
+	AllowedNamePatterns         []string `json:"allowed_name_patterns"`
+	BlockedNamePatterns         []string `json:"blocked_name_patterns"`
+	MaxTargetsPerRun            int      `json:"max_targets_per_run"`
+	MaxDestructiveActionsPerRun int      `json:"max_destructive_actions_per_run"`
+}
+
 // DefaultConfig returns a sensible default configuration.
 func DefaultConfig() *Config {
 	return &Config{
@@ -274,6 +293,17 @@ func DefaultConfig() *Config {
 		HealthCheck: HealthCheckConfig{
 			Enabled:        false,
 			TimeoutSeconds: 5,
+		},
+		Safety: SafetyConfig{
+			Enabled:                     true,
+			FailClosed:                  true,
+			RequireApproval:             true,
+			InteractiveConfirm:          true,
+			AllowDestructiveActions:     false,
+			BlockedNamespaces:           []string{"kube-system", "kube-public"},
+			BlockedNamePatterns:         []string{`^kube-.*`, `^istio-.*`, `^linkerd-.*`},
+			MaxTargetsPerRun:            20,
+			MaxDestructiveActionsPerRun: 8,
 		},
 	}
 }
@@ -373,6 +403,25 @@ func (c *Config) Validate() error {
 			if ep.URL == "" {
 				return fmt.Errorf("healthcheck endpoint %d has no URL", i)
 			}
+		}
+	}
+
+	if c.Safety.Enabled {
+		for i, pattern := range c.Safety.AllowedNamePatterns {
+			if _, err := regexp.Compile(pattern); err != nil {
+				return fmt.Errorf("safety allowed_name_patterns[%d] is invalid: %w", i, err)
+			}
+		}
+		for i, pattern := range c.Safety.BlockedNamePatterns {
+			if _, err := regexp.Compile(pattern); err != nil {
+				return fmt.Errorf("safety blocked_name_patterns[%d] is invalid: %w", i, err)
+			}
+		}
+		if c.Safety.MaxTargetsPerRun < 0 {
+			return fmt.Errorf("safety max_targets_per_run cannot be negative")
+		}
+		if c.Safety.MaxDestructiveActionsPerRun < 0 {
+			return fmt.Errorf("safety max_destructive_actions_per_run cannot be negative")
 		}
 	}
 
