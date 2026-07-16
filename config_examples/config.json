@@ -2,46 +2,57 @@
   "dry_run": false,
   "log_level": "info",
   "interval": 30000000000,
-
   "safety": {
     "enabled": true,
     "fail_closed": true,
     "require_approval": true,
     "interactive_confirm": true,
     "allow_destructive_actions": true,
-    "blocked_namespaces": ["kube-system", "kube-public"],
-    "blocked_name_patterns": ["^kube-.*", "^istio-.*", "^linkerd-.*"],
+    "blocked_namespaces": [
+      "kube-system",
+      "kube-public"
+    ],
+    "blocked_name_patterns": [
+      "^kube-.*",
+      "^istio-.*",
+      "^linkerd-.*"
+    ],
     "max_targets_per_run": 20,
     "max_destructive_actions_per_run": 8
   },
-
   "kubernetes": {
     "enabled": true,
     "kubeconfig": "",
-    "namespaces": ["default"],
-    "label_selectors": ["app=go-service"],
-    "actions": ["kill_pod", "scale_down"],
+    "namespaces": [
+      "default"
+    ],
+    "label_selectors": [
+      "app=go-service"
+    ],
+    "actions": [
+      "kill_pod",
+      "scale_down"
+    ],
     "max_targets": 1,
     "grace_period_seconds": 30,
-    "excluded_pods": ["kube-system", "monitoring"]
+    "excluded_pods": [
+      "kube-system",
+      "monitoring"
+    ]
   },
-
   "scheduler": {
     "mode": "once",
     "cron_expression": "",
     "max_experiments": 0
   },
-
   "metrics": {
     "enabled": true,
     "address": ":9090"
   },
-
   "report": {
     "enabled": true,
     "output_dir": "./reports"
   },
-
   "notify": {
     "enabled": false,
     "webhooks": [
@@ -67,7 +78,6 @@
       }
     ]
   },
-
   "healthcheck": {
     "enabled": true,
     "timeout_seconds": 5,
@@ -85,5 +95,64 @@
         "expected_status": 200
       }
     ]
-  }
+  },
+  "scenarios": [
+    {
+      "name": "network-and-http-baseline",
+      "enabled": true,
+      "order": 10,
+      "parallel": false,
+      "prerequisites": [],
+      "retries": 1,
+      "steps": [
+        {
+          "name": "network",
+          "condition": "always",
+          "retries": 0
+        },
+        {
+          "name": "http",
+          "condition": "on_success",
+          "retries": 2
+        }
+      ]
+    },
+    {
+      "name": "parallel-stress-and-k8s",
+      "enabled": true,
+      "order": 20,
+      "parallel": true,
+      "prerequisites": [
+        "network-and-http-baseline"
+      ],
+      "retries": 0,
+      "steps": [
+        {
+          "name": "stress",
+          "condition": "always"
+        },
+        {
+          "name": "kubernetes",
+          "condition": "always"
+        }
+      ]
+    },
+    {
+      "name": "recovery-check",
+      "enabled": true,
+      "order": 30,
+      "parallel": false,
+      "prerequisites": [
+        "parallel-stress-and-k8s"
+      ],
+      "retries": 1,
+      "steps": [
+        {
+          "name": "http",
+          "condition": "always",
+          "retries": 3
+        }
+      ]
+    }
+  ]
 }

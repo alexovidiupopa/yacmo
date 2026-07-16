@@ -18,10 +18,10 @@
 - [Features](#features)
 - [Getting Started](#getting-started)
 - [Configuration Reference](#configuration-reference)
-- [Experiment Modules](#experiment-modules)
-- [Observability](#observability)
+- [Scenario Orchestration](#scenario-orchestration)
 - [Safety Mechanisms](#safety-mechanisms)
-- [Scenarios](#scenarios)
+- [Safety Configuration](#safety-configuration)
+- [Example Scenarios](#example-scenarios)
 
 ---
 
@@ -46,29 +46,32 @@ YACMO is a chaos engineering tool designed to test the resilience of distributed
 │  CLI flags · config loading · signal handling · wiring      │
 └──────────────────────────┬──────────────────────────────────┘
                            │
-          ┌────────────────▼────────────────┐
-          │        Scheduler                │
-          │  once · continuous · cron       │
-          └────────────────┬────────────────┘
+           ┌───────────────▼───────────────┐
+           │        Scheduler              │
+           │  once · continuous · cron     │
+           └───────────────┬───────────────┘
                            │
-          ┌────────────────▼────────────────┐
-          │        Chaos Engine             │
-          │  sequential execution           │
-          │  result callbacks               │
-          │  rollback orchestration         │
-          └──┬──┬──┬──┬──┬──┬──────────────┘
-             │  │  │  │  │  │
-    ┌────────┘  │  │  │  │  └────────┐
-    ▼           ▼  ▼  ▼  ▼           ▼
-┌──────┐  ┌────┐┌────┐┌──┐  ┌───────┐┌──────┐
-│ K8s  │  │HTTP││gRPC││MQ│  │Network││Stress│
-└──────┘  └────┘└────┘└──┘  └───────┘└──────┘
+           ┌───────────────▼──────────────────────────┐
+           │        Chaos Engine                      │
+           │  Scenario orchestration:                 │
+           │  · Named experiments                     │
+           │  · Sequential/parallel steps             │
+           │  · Prerequisites & dependencies          │
+           │  · Retries & conditional execution       │
+           │  · Result callbacks & rollback           │
+           └──┬──┬──┬──┬──┬──┬───────────────────────┘
+              │  │  │  │  │  │
+     ┌────────┘  │  │  │  │  └────────┐
+     ▼           ▼  ▼  ▼  ▼           ▼
+ ┌──────┐  ┌────┐┌────┐┌──┐  ┌───────┐┌──────┐
+ │ K8s  │  │HTTP││gRPC││MQ│  │Network││Stress│
+ └──────┘  └────┘└────┘└──┘  └───────┘└──────┘
 
-    ┌──────────────────────────────────────┐
-    │         Cross-cutting concerns       │
-    │  Metrics · Reports · Notifications   │
-    │  Health Checks · Logging             │
-    └──────────────────────────────────────┘
+     ┌──────────────────────────────────────┐
+     │      Cross-cutting concerns          │
+     │  Metrics · Reports · Notifications   │
+     │  Health Checks · Logging · Safety    │
+     └──────────────────────────────────────┘
 ```
 
 ### Package Layout
@@ -282,37 +285,296 @@ Each module has an `"enabled": true/false` toggle. See `config.example.json` for
 7. **Health check comparison** — measures blast radius before/after chaos
 8. **Duration limits** — all experiments respect context cancellation and duration caps
 9. **Safety preflight** — validates approval, allow/deny rules, and command availability before running destructive actions
+10. **Scenario prerequisites** — ensures experiments only run after dependencies succeed
+11. **Resource quotas** — enforces safety caps on destructive actions per run
 
 ---
 
-## Scenarios
+## Safety Configuration
+
+The `safety` section in your config controls guardrails for destructive experiments:
+
+```json
+{
+  "safety": {
+    "enabled": true,
+    "fail_closed": true,
+    "require_approval": false,
+    "interactive_confirm": true,
+    "allow_destructive_actions": true,
+    "allowed_namespaces": ["default", "app-tier"],
+    "blocked_namespaces": ["kube-system", "kube-public"],
+    "allowed_name_patterns": [],
+    "blocked_name_patterns": ["^kube-.*", "^istio-.*", "^linkerd-.*"],
+    "max_targets_per_run": 20,
+    "max_destructive_actions_per_run": 8
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Enable safety guardrails |
+| `fail_closed` | bool | `true` | If safety check fails, abort run |
+| `require_approval` | bool | `true` | Require explicit approval flag |
+| `interactive_confirm` | bool | `true` | Prompt on terminal for YES confirmation |
+| `allow_destructive_actions` | bool | `false` | Allow actions like kill_pod, scale_down, delete_service |
+| `allowed_namespaces` | []string | `[]` | Whitelist; if non-empty, only these namespaces are targetable |
+| `blocked_namespaces` | []string | — | Blacklist namespaces (e.g., kube-system) |
+| `allowed_name_patterns` | []string | `[]` | Regex whitelist for resource names; if non-empty, only matching names are targetable |
+| `blocked_name_patterns` | []string | — | Regex blacklist for resource names (e.g., `^kube-.*`) |
+| `max_targets_per_run` | int | `20` | Maximum resources to target per execution |
+| `max_destructive_actions_per_run` | int | `8` | Maximum destructive operations (kills, scales, deletes) per run |
+
+---
+
+## Scenario Orchestration
+
+**Named Scenarios** allow you to orchestrate multi-step chaos campaigns with **ordering, parallel groups, prerequisites, retries, and conditional execution**.
+
+### Scenario Features
+
+- **Named experiments**: Register experiments with stable IDs so scenarios can reference them
+  - Registered IDs: `"kubernetes"`, `"http"`, `"grpc"`, `"mq"`, `"network"`, `"stress"`
+- **Ordering**: Control execution order via `order` field (lower runs first)
+- **Parallel execution**: Set `parallel: true` to run all steps concurrently
+- **Prerequisites**: Scenario A can depend on Scenario B (waits for success)
+- **Retries**: Configurable at scenario level or per-step
+- **Conditional steps**: Run steps based on previous step success/failure
+
+### Scenario Configuration
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "baseline-chaos",
+      "enabled": true,
+      "order": 10,
+      "parallel": false,
+      "prerequisites": [],
+      "retries": 1,
+      "steps": [
+        {
+          "name": "network",
+          "condition": "always",
+          "retries": 0
+        },
+        {
+          "name": "http",
+          "condition": "on_success",
+          "retries": 2
+        }
+      ]
+    },
+    {
+      "name": "multi-vector-attack",
+      "enabled": true,
+      "order": 20,
+      "parallel": true,
+      "prerequisites": ["baseline-chaos"],
+      "retries": 0,
+      "steps": [
+        { "name": "stress", "condition": "always" },
+        { "name": "kubernetes", "condition": "always" }
+      ]
+    }
+  ]
+}
+```
+
+### Scenario Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Unique scenario identifier (used in logs and prerequisites) |
+| `enabled` | bool | Skip if `false` |
+| `order` | int | Lower values run first (scenarios sorted by this) |
+| `parallel` | bool | If `true`, all steps run concurrently; if `false`, sequentially |
+| `prerequisites` | []string | Scenario names that must succeed before this runs |
+| `retries` | int | Default retry count for steps in this scenario |
+| `steps` | []ScenarioStep | List of experiment steps |
+
+### ScenarioStep Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Experiment ID: `"kubernetes"`, `"http"`, `"grpc"`, `"mq"`, `"network"`, `"stress"` |
+| `condition` | string | `"always"` (default), `"on_success"` (run only if prev succeeded), `"on_failure"` (run only if prev failed) |
+| `retries` | int | Per-step retry count (overrides scenario default) |
+
+### Execution Examples
+
+**Sequential Scenario (Default)**
+```
+Step 1: network chaos
+  ↓
+Step 2: HTTP injection (only if step 1 succeeded)
+```
+
+**Parallel Scenario**
+```
+Step 1: Stress ─┐
+Step 2: K8s    ├─ (concurrent)
+```
+
+**With Prerequisites**
+```
+Scenario A (order 10)
+  ↓ (succeeds)
+Scenario B (order 20, prerequisite: A)
+  ↓ (now runs)
+Scenario C (order 30, prerequisite: B)
+```
+
+---
+
+## Example Scenarios
 
 ### Scenario 1: Kubernetes Resilience Test
 > *"Does my service survive random pod failures?"*
 
 Enable `kubernetes` with `kill_pod`, set `max_targets: 1`, use `continuous` scheduler with 5-minute intervals. Enable `healthcheck` to verify the service recovers between rounds.
 
-### Scenario 2: API Load + Failure Simulation
-> *"How does my API behave under load while infrastructure is degraded?"*
+```json
+{
+  "scenarios": [
+    {
+      "name": "pod-failure-resilience",
+      "enabled": true,
+      "order": 10,
+      "parallel": false,
+      "prerequisites": [],
+      "retries": 0,
+      "steps": [
+        {
+          "name": "kubernetes",
+          "condition": "always",
+          "retries": 0
+        }
+      ]
+    }
+  ]
+}
+```
 
-Enable `http` flood against your API and `kubernetes` kill_pod simultaneously. The engine runs them sequentially — first the K8s chaos, then the HTTP flood hits the degraded system.
+### Scenario 2: Progressive Degradation Test
+> *"How does my system degrade under multi-layer stress?"*
 
-### Scenario 3: Message Queue Backpressure
+Orchestrate progressive attacks: start with network chaos, then add HTTP floods, finally hit Kubernetes.
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "network-baseline",
+      "enabled": true,
+      "order": 10,
+      "parallel": false,
+      "prerequisites": [],
+      "steps": [
+        { "name": "network", "condition": "always" }
+      ]
+    },
+    {
+      "name": "add-http-load",
+      "enabled": true,
+      "order": 20,
+      "parallel": false,
+      "prerequisites": ["network-baseline"],
+      "steps": [
+        { "name": "http", "condition": "always", "retries": 1 }
+      ]
+    },
+    {
+      "name": "infrastructure-attack",
+      "enabled": true,
+      "order": 30,
+      "parallel": false,
+      "prerequisites": ["add-http-load"],
+      "steps": [
+        { "name": "kubernetes", "condition": "always" }
+      ]
+    }
+  ]
+}
+```
+
+### Scenario 3: Parallel Multi-Vector Attack
+> *"Can my system handle simultaneous failures across layers?"*
+
+Execute stress + network + HTTP floods in parallel for maximum impact.
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "multi-vector-chaos",
+      "enabled": true,
+      "order": 10,
+      "parallel": true,
+      "prerequisites": [],
+      "retries": 1,
+      "steps": [
+        { "name": "stress", "condition": "always" },
+        { "name": "network", "condition": "always" },
+        { "name": "http", "condition": "always" },
+        { "name": "kubernetes", "condition": "always" }
+      ]
+    }
+  ]
+}
+```
+
+### Scenario 4: Recovery Verification with Conditional Steps
+> *"Does my system recover gracefully after failures?"*
+
+Run chaos, then use conditional steps to verify recovery (only if chaos succeeded).
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "chaos-phase",
+      "enabled": true,
+      "order": 10,
+      "parallel": true,
+      "prerequisites": [],
+      "steps": [
+        { "name": "network", "condition": "always" },
+        { "name": "stress", "condition": "always" }
+      ]
+    },
+    {
+      "name": "recovery-check",
+      "enabled": true,
+      "order": 20,
+      "parallel": false,
+      "prerequisites": ["chaos-phase"],
+      "retries": 3,
+      "steps": [
+        {
+          "name": "http",
+          "condition": "on_success",
+          "retries": 5
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Scenario 5: Message Queue Backpressure
 > *"What happens when a queue gets flooded with garbage?"*
 
 Enable `mq` with a high `message_count` and `random_payload: true`. Monitor your consumer's behavior, dead-letter rates, and memory usage.
 
-### Scenario 4: Network Partition Simulation
+### Scenario 6: Network Partition Simulation
 > *"Can my microservices handle network degradation?"*
 
 Enable `network` with `latency` (200ms + 50ms jitter) and `packet_loss` (10%). Set a `duration` to auto-rollback. Combine with `healthcheck` to measure recovery time.
 
-### Scenario 5: Resource Exhaustion
-> *"Does my system degrade gracefully under resource pressure?"*
-
-Enable `stress` with `cpu` (2 cores) and `memory` (512MB) for 60 seconds. Monitor your application's response times and error rates.
-
-### Scenario 6: Full Chaos Day
+### Scenario 7: Full Chaos Day
 > *"Run everything on a schedule and report to Slack."*
 
 Enable all modules, set scheduler to `cron` with `@every 30m`, enable `metrics` for Grafana dashboards, `report` for audit trail, and `notify` with your Slack webhook.

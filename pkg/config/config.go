@@ -51,6 +51,8 @@ type Config struct {
 
 	// Safety configuration
 	Safety SafetyConfig `json:"safety"`
+	// Scenarios allow named orchestration of experiments (ordering, groups, prerequisites, retries, conditional steps)
+	Scenarios []Scenario `json:"scenarios"`
 }
 
 // KubernetesConfig holds settings for Kubernetes chaos experiments.
@@ -305,7 +307,26 @@ func DefaultConfig() *Config {
 			MaxTargetsPerRun:            20,
 			MaxDestructiveActionsPerRun: 8,
 		},
+		Scenarios: []Scenario{},
 	}
+}
+
+// Scenario defines a named sequence/group of steps referencing registered experiments.
+type Scenario struct {
+	Name          string         `json:"name"`
+	Enabled       bool           `json:"enabled"`
+	Order         int            `json:"order"` // lower order runs first
+	Parallel      bool           `json:"parallel"`
+	Prerequisites []string       `json:"prerequisites"` // scenario names that must have succeeded
+	Retries       int            `json:"retries"`       // default retries for steps in this scenario
+	Steps         []ScenarioStep `json:"steps"`
+}
+
+// ScenarioStep references a named experiment and supports per-step condition and retries.
+type ScenarioStep struct {
+	Name      string `json:"name"`      // experiment id registered via Engine.RegisterNamed
+	Condition string `json:"condition"` // "always" (default), "on_success", "on_failure"
+	Retries   int    `json:"retries"`   // per-step retries override
 }
 
 // LoadFromFile reads configuration from a JSON file.

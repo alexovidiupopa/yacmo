@@ -4,6 +4,7 @@ package chaos
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -40,16 +41,19 @@ type Engine struct {
 	cfg         *config.Config
 	log         *logger.Logger
 	experiments []Experiment
-	results     []ExperimentResult
-	callbacks   []ResultCallback
-	mu          sync.Mutex
+	// namedExperiments holds experiments registered with a stable name
+	namedExperiments map[string]Experiment
+	results          []ExperimentResult
+	callbacks        []ResultCallback
+	mu               sync.Mutex
 }
 
 // NewEngine creates a new chaos engine.
 func NewEngine(cfg *config.Config, log *logger.Logger) *Engine {
 	return &Engine{
-		cfg: cfg,
-		log: log,
+		cfg:              cfg,
+		log:              log,
+		namedExperiments: make(map[string]Experiment),
 	}
 }
 
@@ -66,6 +70,22 @@ func (e *Engine) Register(exp Experiment) {
 	defer e.mu.Unlock()
 	e.experiments = append(e.experiments, exp)
 	e.log.Info("Registered experiment: %s", exp.Name())
+}
+
+// RegisterNamed registers an experiment by a stable identifier so scenarios can reference it.
+func (e *Engine) RegisterNamed(id string, exp Experiment) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.namedExperiments[id] = exp
+	e.experiments = append(e.experiments, exp)
+	e.log.Info("Registered experiment: %s (id=%s)", exp.Name(), id)
+}
+
+// GetExperiment returns a named experiment if registered, otherwise nil.
+func (e *Engine) GetExperiment(id string) Experiment {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.namedExperiments[id]
 }
 
 // RunAll executes all registered experiments sequentially.
@@ -85,6 +105,15 @@ func (e *Engine) RunAll(ctx context.Context) []ExperimentResult {
 	}
 
 	var results []ExperimentResult
+
+	// If scenarios are defined in the config, execute them instead of the simple sequential list.
+	if e.cfg != nil && len(e.cfg.Scenarios) > 0 {
+		results = e.runScenarios(ctx, callbacks)
+		e.mu.Lock()
+		e.results = append(e.results, results...)
+		e.mu.Unlock()
+		return results
+	}
 
 	for _, exp := range experiments {
 		select {
@@ -142,6 +171,179 @@ func (e *Engine) RunAll(ctx context.Context) []ExperimentResult {
 	e.mu.Unlock()
 
 	return results
+}
+
+// runScenarios executes configured scenarios (ordering, parallel groups, prerequisites, retries, and conditional steps)
+func (e *Engine) runScenarios(ctx context.Context, callbacks []ResultCallback) []ExperimentResult {
+	// Copy scenarios and sort by Order
+	scenarios := make([]config.Scenario, len(e.cfg.Scenarios))
+	copy(scenarios, e.cfg.Scenarios)
+	sort.Slice(scenarios, func(i, j int) bool {
+		return scenarios[i].Order < scenarios[j].Order
+	})
+
+	var resultsMu sync.Mutex
+	var results []ExperimentResult
+
+	// track scenario success for prerequisites
+	scenarioSuccess := make(map[string]bool)
+
+	for _, sc := range scenarios {
+		if !sc.Enabled {
+			e.log.Info("Skipping disabled scenario: %s", sc.Name)
+			continue
+		}
+
+		// check prerequisites
+		skip := false
+		for _, pre := range sc.Prerequisites {
+			if ok := scenarioSuccess[pre]; !ok {
+				e.log.Warn("Skipping scenario %s because prerequisite %s did not succeed", sc.Name, pre)
+				skip = true
+				break
+			}
+		}
+		if skip {
+			scenarioSuccess[sc.Name] = false
+			continue
+		}
+
+		e.log.Info("▶ Starting scenario: %s", sc.Name)
+
+		// run steps
+		allSucceeded := true
+		if sc.Parallel {
+			var wg sync.WaitGroup
+			for _, step := range sc.Steps {
+				wg.Add(1)
+				go func(st config.ScenarioStep) {
+					defer wg.Done()
+					r := e.runScenarioStep(ctx, sc.Name, st, sc.Retries, callbacks)
+					resultsMu.Lock()
+					results = append(results, r)
+					resultsMu.Unlock()
+					if !r.Success {
+						allSucceeded = false
+					}
+				}(step)
+			}
+			wg.Wait()
+		} else {
+			prevSuccess := true
+			for _, step := range sc.Steps {
+				// condition: "always" (default), "on_success", "on_failure"
+				cond := step.Condition
+				if cond == "" {
+					cond = "always"
+				}
+				if cond == "on_success" && !prevSuccess {
+					e.log.Info("  Skipping step %s due to condition on_success and previous failure", step.Name)
+					continue
+				}
+				if cond == "on_failure" && prevSuccess {
+					e.log.Info("  Skipping step %s due to condition on_failure and previous success", step.Name)
+					continue
+				}
+				r := e.runScenarioStep(ctx, sc.Name, step, sc.Retries, callbacks)
+				resultsMu.Lock()
+				results = append(results, r)
+				resultsMu.Unlock()
+				if !r.Success {
+					prevSuccess = false
+					allSucceeded = false
+				} else {
+					prevSuccess = true
+				}
+			}
+		}
+
+		scenarioSuccess[sc.Name] = allSucceeded
+	}
+
+	return results
+}
+
+// runScenarioStep executes a single scenario step with retry logic.
+func (e *Engine) runScenarioStep(ctx context.Context, scenarioName string, step config.ScenarioStep, scenarioRetries int, callbacks []ResultCallback) ExperimentResult {
+	exp := e.GetExperiment(step.Name)
+	startedAt := time.Now()
+
+	if exp == nil {
+		e.log.Error("  ✗ Unknown experiment id referenced in scenario %s: %s", scenarioName, step.Name)
+		res := ExperimentResult{
+			ExperimentName: step.Name,
+			Success:        false,
+			Error:          fmt.Errorf("unknown experiment %s", step.Name),
+			StartedAt:      startedAt,
+			Duration:       time.Since(startedAt),
+		}
+		return res
+	}
+
+	// Determine number of attempts (retries + 1)
+	attempts := 1
+	if step.Retries > 0 {
+		attempts = step.Retries + 1
+	} else if scenarioRetries > 0 {
+		attempts = scenarioRetries + 1
+	}
+
+	var result ExperimentResult
+	for attempt := 1; attempt <= attempts; attempt++ {
+		select {
+		case <-ctx.Done():
+			e.log.Warn("Context cancelled while running step %s", step.Name)
+			result = ExperimentResult{
+				ExperimentName: step.Name,
+				Success:        false,
+				Error:          ctx.Err(),
+				StartedAt:      startedAt,
+				Duration:       time.Since(startedAt),
+			}
+			return result
+		default:
+		}
+
+		if e.cfg.DryRun {
+			e.log.Info("  [DRY-RUN] Skipping actual execution of: %s", exp.Name())
+			result = ExperimentResult{
+				ExperimentName: exp.Name(),
+				Success:        true,
+				Details:        "dry-run: skipped",
+				StartedAt:      startedAt,
+				Duration:       time.Since(startedAt),
+			}
+			break
+		}
+
+		err := exp.Run(ctx)
+		result = ExperimentResult{
+			ExperimentName: exp.Name(),
+			Success:        err == nil,
+			Error:          err,
+			StartedAt:      startedAt,
+			Duration:       time.Since(startedAt),
+		}
+
+		if err == nil {
+			e.log.Info("  ✓ Step %s completed in %s", step.Name, result.Duration)
+			result.Details = "success"
+			break
+		}
+
+		result.Details = fmt.Sprintf("error: %v", err)
+		e.log.Error("  ✗ Step %s failed on attempt %d/%d: %v", step.Name, attempt, attempts, err)
+		if attempt < attempts {
+			e.log.Info("  ↻ Retrying step %s", step.Name)
+		}
+	}
+
+	// invoke callbacks
+	for _, cb := range callbacks {
+		cb(result)
+	}
+
+	return result
 }
 
 // RollbackAll rolls back all registered experiments (in reverse order).
