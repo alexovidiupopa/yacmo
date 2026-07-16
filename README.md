@@ -244,6 +244,7 @@ cp config.example.json config.json
 | `-config` | `config.json` | Path to configuration file |
 | `-dry-run` | `false` | Log what would happen without executing |
 | `-log-level` | (from config) | Override: `debug`, `info`, `warn`, `error` |
+| `-approve` | `false` | Approve destructive actions after safety preflight |
 | `-version` | — | Print version and exit |
 
 ---
@@ -262,6 +263,7 @@ Common values: `30s = 30000000000`, `1m = 60000000000`, `5m = 300000000000`.
 | `dry_run` | bool | Skip actual execution, only log |
 | `log_level` | string | `debug`, `info`, `warn`, `error` |
 | `interval` | duration | Interval between scheduler rounds |
+| `safety` | object | Guardrails for namespaces, patterns, approval, and blast-radius caps |
 
 ### Feature Sections
 
@@ -279,6 +281,7 @@ Each module has an `"enabled": true/false` toggle. See `config.example.json` for
 6. **Protected resources** — never deletes the `kubernetes` service
 7. **Health check comparison** — measures blast radius before/after chaos
 8. **Duration limits** — all experiments respect context cancellation and duration caps
+9. **Safety preflight** — validates approval, allow/deny rules, and command availability before running destructive actions
 
 ---
 
@@ -319,4 +322,3 @@ Enable all modules, set scheduler to `cron` with `@every 30m`, enable `metrics` 
 ## License
 
 MIT
-

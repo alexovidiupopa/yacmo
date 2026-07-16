@@ -14,15 +14,17 @@
 //
 // Usage:
 //
-//	yacmo -config config.json [-dry-run] [-log-level debug|info|warn|error]
+//	yacmo -config config.json [-dry-run] [-log-level debug|info|warn|error] [-approve]
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"yacmo/pkg/chaos"
@@ -37,6 +39,7 @@ import (
 	"yacmo/pkg/network"
 	"yacmo/pkg/notify"
 	"yacmo/pkg/report"
+	"yacmo/pkg/safety"
 	"yacmo/pkg/scheduler"
 	"yacmo/pkg/stress"
 )
@@ -56,6 +59,7 @@ func main() {
 	configPath := flag.String("config", "config.json", "Path to configuration file")
 	dryRun := flag.Bool("dry-run", false, "Enable dry-run mode (no actual changes)")
 	logLevel := flag.String("log-level", "", "Log level override (debug, info, warn, error)")
+	approve := flag.Bool("approve", false, "Approve destructive actions after safety preflight")
 	showVersion := flag.Bool("version", false, "Show version and exit")
 	flag.Parse()
 
@@ -93,6 +97,23 @@ func main() {
 
 	if cfg.DryRun {
 		log.Warn("DRY-RUN MODE: no actual changes will be made")
+	}
+
+	policyPreview, err := safety.NewPolicy(cfg.Safety)
+	if err != nil {
+		log.Error("Safety preflight failed: %v", err)
+		os.Exit(1)
+	}
+
+	approved := *approve
+	if !approved && cfg.Safety.Enabled && cfg.Safety.InteractiveConfirm && policyPreview.EstimateDestructiveActions(cfg) > 0 {
+		approved = promptForApproval(os.Stdin, log)
+	}
+
+	policy, err := safety.Preflight(cfg, approved, log)
+	if err != nil {
+		log.Error("Safety preflight failed: %v", err)
+		os.Exit(1)
 	}
 
 	// ── Metrics ────────────────────────────────────────────────
@@ -149,7 +170,7 @@ func main() {
 
 	// Kubernetes chaos
 	if cfg.Kubernetes.Enabled {
-		k8sChaos, err := k8s.New(cfg.Kubernetes, log)
+		k8sChaos, err := k8s.New(cfg.Kubernetes, policy, log)
 		if err != nil {
 			log.Error("Failed to initialize Kubernetes chaos: %v", err)
 			os.Exit(1)
@@ -177,13 +198,13 @@ func main() {
 
 	// Network chaos
 	if cfg.Network.Enabled {
-		netChaos := network.New(cfg.Network, log)
+		netChaos := network.New(cfg.Network, policy, log)
 		engine.Register(netChaos)
 	}
 
 	// Resource stress
 	if cfg.Stress.Enabled {
-		stressChaos := stress.New(cfg.Stress, log)
+		stressChaos := stress.New(cfg.Stress, policy, log)
 		engine.Register(stressChaos)
 	}
 
@@ -253,4 +274,23 @@ func main() {
 	}
 
 	log.Info("YACMO finished. Goodbye! 🐒")
+}
+
+func promptForApproval(stdin *os.File, log *logger.Logger) bool {
+	info, err := stdin.Stat()
+	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+
+	fmt.Print("Safety approval required. Type YES to continue: ")
+	reader := bufio.NewReader(stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(line), "YES") {
+		return true
+	}
+	log.Warn("Safety approval declined")
+	return false
 }

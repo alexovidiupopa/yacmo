@@ -10,6 +10,7 @@ import (
 
 	"yacmo/pkg/config"
 	"yacmo/pkg/logger"
+	"yacmo/pkg/safety"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -20,6 +21,7 @@ import (
 // ChaosK8s implements chaos.Experiment for Kubernetes resources.
 type ChaosK8s struct {
 	cfg       config.KubernetesConfig
+	policy    *safety.Policy
 	log       *logger.Logger
 	clientset kubernetes.Interface
 	// Track what we affected for rollback
@@ -39,7 +41,7 @@ type depRef struct {
 }
 
 // New creates a new Kubernetes chaos experiment.
-func New(cfg config.KubernetesConfig, log *logger.Logger) (*ChaosK8s, error) {
+func New(cfg config.KubernetesConfig, policy *safety.Policy, log *logger.Logger) (*ChaosK8s, error) {
 	var restCfg *rest.Config
 	var err error
 
@@ -59,6 +61,7 @@ func New(cfg config.KubernetesConfig, log *logger.Logger) (*ChaosK8s, error) {
 
 	return &ChaosK8s{
 		cfg:       cfg,
+		policy:    policy,
 		log:       log,
 		clientset: clientset,
 	}, nil
@@ -101,6 +104,18 @@ func (c *ChaosK8s) Run(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// DestructiveActionCount returns the number of destructive Kubernetes actions configured.
+func (c *ChaosK8s) DestructiveActionCount() int {
+	total := 0
+	for _, action := range c.cfg.Actions {
+		switch action {
+		case "kill_pod", "scale_down", "delete_service":
+			total += len(c.cfg.Namespaces)
+		}
+	}
+	return total
 }
 
 // Rollback attempts to undo the chaos (best-effort).
@@ -170,6 +185,12 @@ func (c *ChaosK8s) killPods(ctx context.Context) error {
 		// Randomly select targets
 		targets := selectRandom(eligible, c.cfg.MaxTargets)
 		for _, podName := range targets {
+			if c.policy != nil {
+				if err := c.policy.CheckK8sTarget(ns, podName, "kill_pod"); err != nil {
+					c.log.Error("Skipping pod %s/%s: %v", ns, podName, err)
+					continue
+				}
+			}
 			c.log.Info("🔪 Killing pod %s/%s", ns, podName)
 			gracePeriod := c.cfg.GracePeriodSeconds
 			err := c.clientset.CoreV1().Pods(ns).Delete(ctx, podName, metav1.DeleteOptions{
@@ -220,6 +241,12 @@ func (c *ChaosK8s) scaleDownDeployments(ctx context.Context) error {
 
 		targets := selectRandom(names, c.cfg.MaxTargets)
 		for _, depName := range targets {
+			if c.policy != nil {
+				if err := c.policy.CheckK8sTarget(ns, depName, "scale_down"); err != nil {
+					c.log.Error("Skipping deployment %s/%s: %v", ns, depName, err)
+					continue
+				}
+			}
 			c.log.Info("📉 Scaling down deployment %s/%s from %d to 0", ns, depName, origReplicas[depName])
 
 			scale, err := c.clientset.AppsV1().Deployments(ns).GetScale(ctx, depName, metav1.GetOptions{})
@@ -278,6 +305,12 @@ func (c *ChaosK8s) deleteServices(ctx context.Context) error {
 
 		targets := selectRandom(names, c.cfg.MaxTargets)
 		for _, svcName := range targets {
+			if c.policy != nil {
+				if err := c.policy.CheckK8sTarget(ns, svcName, "delete_service"); err != nil {
+					c.log.Error("Skipping service %s/%s: %v", ns, svcName, err)
+					continue
+				}
+			}
 			c.log.Info("🗑️  Deleting service %s/%s", ns, svcName)
 			err := c.clientset.CoreV1().Services(ns).Delete(ctx, svcName, metav1.DeleteOptions{})
 			if err != nil {

@@ -47,6 +47,18 @@
     ]
   },
 
+  "safety": {
+    "enabled": true,
+    "fail_closed": true,
+    "require_approval": true,
+    "interactive_confirm": true,
+    "allow_destructive_actions": false,
+    "blocked_namespaces": ["kube-system", "kube-public"],
+    "blocked_name_patterns": ["^kube-.*", "^istio-.*", "^linkerd-.*"],
+    "max_targets_per_run": 20,
+    "max_destructive_actions_per_run": 8
+  },
+
   "grpc": {
     "enabled": true,
     "targets": [
@@ -190,4 +202,3 @@
     ]
   }
 }
-
