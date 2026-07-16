@@ -175,37 +175,38 @@ func main() {
 			log.Error("Failed to initialize Kubernetes chaos: %v", err)
 			os.Exit(1)
 		}
-		engine.Register(k8sChaos)
+		// register with a stable id so scenarios may reference it
+		engine.RegisterNamed("kubernetes", k8sChaos)
 	}
 
 	// HTTP injection
 	if cfg.HTTP.Enabled {
 		httpChaos := httpflood.New(cfg.HTTP, log)
-		engine.Register(httpChaos)
+		engine.RegisterNamed("http", httpChaos)
 	}
 
 	// gRPC injection
 	if cfg.GRPC.Enabled {
 		grpcChaos := grpcflood.New(cfg.GRPC, log)
-		engine.Register(grpcChaos)
+		engine.RegisterNamed("grpc", grpcChaos)
 	}
 
 	// MQ injection
 	if cfg.MQ.Enabled {
 		mqChaos := mqflood.New(cfg.MQ, log)
-		engine.Register(mqChaos)
+		engine.RegisterNamed("mq", mqChaos)
 	}
 
 	// Network chaos
 	if cfg.Network.Enabled {
 		netChaos := network.New(cfg.Network, policy, log)
-		engine.Register(netChaos)
+		engine.RegisterNamed("network", netChaos)
 	}
 
 	// Resource stress
 	if cfg.Stress.Enabled {
 		stressChaos := stress.New(cfg.Stress, policy, log)
-		engine.Register(stressChaos)
+		engine.RegisterNamed("stress", stressChaos)
 	}
 
 	// ── Signal handling ────────────────────────────────────────
