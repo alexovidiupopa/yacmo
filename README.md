@@ -98,7 +98,7 @@ yacmo/
 │   ├── stress/stress.go           # Resource stress (CPU, memory, disk)
 │   │
 │   ├── metrics/metrics.go         # Prometheus metrics server
-│   ├── report/report.go           # JSON report generation
+│   ├── report/report.go           # JSON/HTML/CSV report generation
 │   ├── notify/notify.go           # Webhook notifications (Slack, Discord, generic)
 │   └── healthcheck/healthcheck.go # Pre/post health probes
 ```
@@ -194,7 +194,7 @@ All backends support:
 
 ### 9. JSON Reports (`pkg/report/`)
 
-- Generates timestamped JSON reports after each run
+- Generates timestamped JSON/HTML/CSV reports after each run
 - Includes: version, dry-run flag, total duration, per-experiment status/timing/errors
 - Output: `./reports/yacmo-report-20260228-143022.json`
 

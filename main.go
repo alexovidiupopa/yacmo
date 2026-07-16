@@ -131,7 +131,7 @@ func main() {
 	// ── Report builder ─────────────────────────────────────────
 	var reportBuilder *report.Builder
 	if cfg.Report.Enabled {
-		reportBuilder = report.NewBuilder(log, cfg.DryRun)
+		reportBuilder = report.NewBuilder(log, cfg.DryRun, cfg.Report.Format)
 	}
 
 	// ── Health checker ─────────────────────────────────────────
@@ -258,7 +258,7 @@ func main() {
 	// ── Generate report ────────────────────────────────────────
 	if reportBuilder != nil {
 		rpt := reportBuilder.Build()
-		if _, err := report.WriteJSON(rpt, cfg.Report.OutputDir, log); err != nil {
+		if _, err := report.Write(rpt, cfg.Report.OutputDir, log); err != nil {
 			log.Error("Failed to write report: %v", err)
 		}
 	}

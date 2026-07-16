@@ -192,6 +192,7 @@ type MetricsConfig struct {
 type ReportConfig struct {
 	Enabled   bool   `json:"enabled"`
 	OutputDir string `json:"output_dir"` // directory to write reports to
+	Format    string `json:"format"`     // output format (json, html, csv)
 }
 
 // NotifyConfig holds settings for webhook notifications.
@@ -288,6 +289,7 @@ func DefaultConfig() *Config {
 		Report: ReportConfig{
 			Enabled:   false,
 			OutputDir: "./reports",
+			Format:    "json",
 		},
 		Notify: NotifyConfig{
 			Enabled: false,
