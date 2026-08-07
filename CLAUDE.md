@@ -25,8 +25,14 @@ go vet ./...               # static checks
 Common flags: `-config <path>` (default `config.json`), `-dry-run`, `-log-level
 debug|info|warn|error`, `-approve` (approve destructive actions), `-version`.
 
-CI: [.github/workflows/go.yml](.github/workflows/go.yml) runs build + `go test -v ./...`
-on push/PR to `master`.
+CI/CD: [.github/workflows/go.yml](.github/workflows/go.yml) runs on push/PR to `master`,
+on `release/**` branches, and on `v*` tags. It cross-compiles versioned binaries
+(uploaded as artifacts) and runs the tests via `gotestsum`, publishing JUnit + coverage
+as artifacts and a coverage summary to the run's job summary. The build version is stamped
+into the binary via `-ldflags` into [pkg/version](pkg/version/version.go), so
+`yacmo -version` reflects the artefact. Pushing `release/X.Y.Z` produces an
+`X.Y.Z-rc.<run>` pre-release; pushing tag `vX.Y.Z` publishes a full GitHub Release with
+the binaries attached.
 
 > **Tests:** `config`, `safety`, `chaos`, `report`, `healthcheck`, `httpflood`, and
 > `logger` have unit tests (no external infra needed — HTTP paths use `httptest`). The

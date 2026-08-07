@@ -226,6 +226,23 @@ Events emitted: `chaos_starting`, `chaos_completed`, `experiment_done`, `chaos_e
 go build -o yacmo .
 ```
 
+For a versioned build, stamp the version in via `-ldflags` (this is what CI does):
+
+```bash
+go build -ldflags "-X yacmo/pkg/version.Version=1.4.0" -o yacmo .
+./yacmo -version   # YACMO 1.4.0 — Yet Another Chaos Monkey (...)
+```
+
+### Releases
+
+CI ([.github/workflows/go.yml](.github/workflows/go.yml)) builds and tests on every
+push/PR to `master`, uploading the cross-compiled binaries and the test results
+(JUnit + coverage) as downloadable run artifacts. To cut a release:
+
+- Push a `release/X.Y.Z` branch — CI derives an `X.Y.Z-rc.<run>` version, builds the
+  versioned binaries, and publishes a **pre-release** you can validate.
+- Push a `vX.Y.Z` tag — CI publishes a full **GitHub Release** with the binaries attached.
+
 ### Run
 
 ```bash
