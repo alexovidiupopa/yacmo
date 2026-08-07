@@ -1,0 +1,2 @@
+Name,Status,Started At,Duration,Error,Details
+"resource-stress[actions=cpu,memory, duration=30s]",success,2026-07-16T14:41:39+03:00,6.931803958s,,success
