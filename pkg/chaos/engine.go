@@ -221,10 +221,10 @@ func (e *Engine) runScenarios(ctx context.Context, callbacks []ResultCallback) [
 					r := e.runScenarioStep(ctx, sc.Name, st, sc.Retries, callbacks)
 					resultsMu.Lock()
 					results = append(results, r)
-					resultsMu.Unlock()
 					if !r.Success {
 						allSucceeded = false
 					}
+					resultsMu.Unlock()
 				}(step)
 			}
 			wg.Wait()
