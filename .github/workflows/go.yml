@@ -1,28 +1,188 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+# CI/CD for YACMO.
+#
+# On every push/PR to master this builds the binary and runs the test suite,
+# uploading the built binaries and the test results as retrievable artifacts.
+#
+# Releases are version-aware:
+#   - Pushing a `release/**` branch derives a release-candidate version from the
+#     branch name (e.g. release/1.4.0 -> 1.4.0-rc.<run>) and builds versioned
+#     binaries you can download and validate before cutting the release.
+#   - Pushing a `v*` tag (e.g. v1.4.0) builds versioned binaries and publishes a
+#     GitHub Release with them attached.
+#
+# The version is stamped into the binary at build time via -ldflags into
+# yacmo/pkg/version, so `yacmo -version` reflects the artefact's real version.
 
-name: Go
+name: CI/CD
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "release/**" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "master" ]
 
-jobs:
+permissions:
+  contents: write  # needed by the release job to publish GitHub Releases
 
-  build:
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  # Derive the artefact version from the git ref so every downstream job agrees.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.derive.outputs.version }}
+      is_release: ${{ steps.derive.outputs.is_release }}
+      prerelease: ${{ steps.derive.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version
+        id: derive
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            # Tag push: v1.4.0 -> 1.4.0, publish a full release.
+            version="${GITHUB_REF_NAME#v}"
+            is_release=true
+            prerelease=false
+          elif [[ "${GITHUB_REF_NAME}" == release/* ]]; then
+            # Release branch: release/1.4.0 -> 1.4.0-rc.<run>, publish a pre-release.
+            base="${GITHUB_REF_NAME#release/}"
+            base="${base#v}"
+            version="${base}-rc.${GITHUB_RUN_NUMBER}"
+            is_release=true
+            prerelease=true
+          else
+            # Everyday build: 0.0.0-dev+<sha>, never released.
+            version="0.0.0-dev+$(git rev-parse --short HEAD)"
+            is_release=false
+            prerelease=false
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "is_release=${is_release}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${version} (release=${is_release}, prerelease=${prerelease})"
+
+  # Run the test suite and publish JUnit + coverage as retrievable artifacts.
+  test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.25'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Build
-      run: go build -o yacmo . 
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
 
-    - name: Test
-      run: go test -v ./...
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: |
+          gotestsum \
+            --junitfile test-results.xml \
+            --format testname \
+            -- -coverprofile=coverage.out ./...
+
+      - name: Coverage report
+        if: always()
+        run: |
+          go tool cover -func=coverage.out -o coverage.txt || true
+          go tool cover -html=coverage.out -o coverage.html || true
+
+      - name: Write test summary
+        if: always()
+        run: |
+          {
+            echo "## Test results"
+            total=$(grep -E '^total:' coverage.txt 2>/dev/null | awk '{print $NF}')
+            echo "- Total coverage: **${total:-n/a}**"
+            echo ""
+            echo "Full JUnit results and the HTML coverage report are attached as build artifacts."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            test-results.xml
+            coverage.out
+            coverage.txt
+            coverage.html
+          if-no-files-found: warn
+
+  # Cross-compile versioned binaries and upload them as retrievable artifacts.
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: linux,  goarch: amd64 }
+          - { goos: linux,  goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          out="yacmo-${VERSION}-${GOOS}-${GOARCH}"
+          ldflags="-s -w \
+            -X yacmo/pkg/version.Version=${VERSION} \
+            -X yacmo/pkg/version.Commit=$(git rev-parse --short HEAD) \
+            -X yacmo/pkg/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          go build -trimpath -ldflags "${ldflags}" -o "${out}" .
+          echo "Built ${out}"
+
+      - name: Verify version stamp (native build only)
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: ./yacmo-${{ needs.version.outputs.version }}-linux-amd64 -version
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: yacmo-${{ needs.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: yacmo-${{ needs.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          if-no-files-found: error
+
+  # Publish a GitHub Release (pre-release for release branches, full for tags).
+  release:
+    needs: [ version, test, build ]
+    if: needs.version.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download built binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: yacmo-${{ needs.version.outputs.version }}-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: YACMO v${{ needs.version.outputs.version }}
+          prerelease: ${{ needs.version.outputs.prerelease }}
+          generate_release_notes: true
+          files: dist/*

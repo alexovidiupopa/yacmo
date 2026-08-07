@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"yacmo/pkg/logger"
+	"yacmo/pkg/version"
 )
 
 // Report is the top-level report structure written after a chaos run.
@@ -103,7 +104,7 @@ func (b *Builder) Build() *Report {
 	}
 
 	return &Report{
-		Version:     "0.2.0",
+		Version:     version.Version,
 		GeneratedAt: time.Now(),
 		DryRun:      b.dryRun,
 		Duration:    totalDuration.String(),

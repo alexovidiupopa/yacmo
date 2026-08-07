@@ -42,6 +42,7 @@ import (
 	"yacmo/pkg/safety"
 	"yacmo/pkg/scheduler"
 	"yacmo/pkg/stress"
+	"yacmo/pkg/version"
 )
 
 const banner = `
@@ -64,7 +65,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("YACMO v0.2.0 — Yet Another Chaos Monkey")
+		fmt.Println(version.String())
 		os.Exit(0)
 	}
 
