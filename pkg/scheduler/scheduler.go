@@ -7,9 +7,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"yacmo/pkg/chaos"
 	"yacmo/pkg/config"
 	"yacmo/pkg/logger"
+)
+
+// cronParser accepts standard 5-field cron expressions ("*/5 * * * *"),
+// the "@every <duration>" form, and the named descriptors ("@hourly",
+// "@daily", "@weekly", "@monthly", "@yearly").
+var cronParser = cron.NewParser(
+	cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 )
 
 // Scheduler runs the chaos engine on a schedule.
@@ -78,30 +87,34 @@ func (s *Scheduler) runContinuous(ctx context.Context) error {
 	}
 }
 
-// runCron executes experiments on a cron-like schedule.
-// This is a simplified cron implementation that parses basic interval expressions.
-// For a full cron implementation, consider using a library like robfig/cron.
+// runCron executes experiments on a cron schedule. It supports standard
+// 5-field cron expressions, "@every <duration>", and named descriptors
+// (see cronParser), computing the next fire time before each round.
 func (s *Scheduler) runCron(ctx context.Context) error {
 	if s.cfg.CronExpression == "" {
 		return fmt.Errorf("cron mode requires a cron_expression")
 	}
 
-	// Parse a simple interval from the cron expression.
-	// For a full implementation, integrate github.com/robfig/cron/v3.
-	interval, err := parseSimpleCron(s.cfg.CronExpression)
+	schedule, err := cronParser.Parse(s.cfg.CronExpression)
 	if err != nil {
-		return fmt.Errorf("parsing cron expression: %w", err)
+		return fmt.Errorf("parsing cron expression %q: %w", s.cfg.CronExpression, err)
 	}
 
-	s.log.Info("Scheduler mode: cron (expression=%s, effective_interval=%s)", s.cfg.CronExpression, interval)
+	s.log.Info("Scheduler mode: cron (expression=%s)", s.cfg.CronExpression)
 
 	round := 0
 	for {
-		// Wait until next tick
+		now := time.Now()
+		next := schedule.Next(now)
+		wait := next.Sub(now)
+		s.log.Debug("Next cron round at %s (in %s)", next.Format(time.RFC3339), wait.Round(time.Second))
+
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return ctx.Err()
-		case <-time.After(interval):
+		case <-timer.C:
 		}
 
 		round++
@@ -113,27 +126,4 @@ func (s *Scheduler) runCron(ctx context.Context) error {
 			return nil
 		}
 	}
-}
-
-// parseSimpleCron parses a subset of cron expressions.
-// Supported formats:
-//   - "@every <duration>" e.g. "@every 5m", "@every 1h30m"
-//   - "*/N * * * *" interpreted as every N minutes
-func parseSimpleCron(expr string) (time.Duration, error) {
-	// Handle @every syntax
-	if len(expr) > 7 && expr[:7] == "@every " {
-		d, err := time.ParseDuration(expr[7:])
-		if err != nil {
-			return 0, fmt.Errorf("invalid duration in @every: %w", err)
-		}
-		return d, nil
-	}
-
-	// Handle */N * * * * (every N minutes)
-	var n int
-	if _, err := fmt.Sscanf(expr, "*/%d * * * *", &n); err == nil && n > 0 {
-		return time.Duration(n) * time.Minute, nil
-	}
-
-	return 0, fmt.Errorf("unsupported cron expression %q — use '@every <duration>' or '*/N * * * *'", expr)
 }

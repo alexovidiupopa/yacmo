@@ -7,6 +7,16 @@ import (
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/robfig/cron/v3"
+)
+
+// cronParser validates scheduler cron expressions. It accepts standard
+// 5-field cron expressions, "@every <duration>", and named descriptors
+// ("@hourly", "@daily", ...). It must stay in sync with the parser the
+// scheduler uses at runtime (pkg/scheduler).
+var cronParser = cron.NewParser(
+	cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 )
 
 // Config is the top-level configuration for YACMO.
@@ -427,6 +437,21 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("healthcheck endpoint %d has no URL", i)
 			}
 		}
+	}
+
+	switch c.Scheduler.Mode {
+	case "once", "continuous":
+	case "cron":
+		if c.Scheduler.CronExpression == "" {
+			return fmt.Errorf("scheduler mode is cron but no cron_expression specified")
+		}
+		if _, err := cronParser.Parse(c.Scheduler.CronExpression); err != nil {
+			return fmt.Errorf("invalid scheduler cron_expression %q: %w", c.Scheduler.CronExpression, err)
+		}
+	case "":
+		return fmt.Errorf("scheduler mode is empty (use once, continuous, or cron)")
+	default:
+		return fmt.Errorf("unknown scheduler mode %q (use once, continuous, or cron)", c.Scheduler.Mode)
 	}
 
 	if c.Safety.Enabled {
