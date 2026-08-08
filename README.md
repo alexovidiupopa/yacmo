@@ -214,7 +214,12 @@ Events emitted: `chaos_starting`, `chaos_completed`, `experiment_done`, `chaos_e
 |---|---|
 | `once` | Run all experiments a single time |
 | `continuous` | Repeat on a fixed interval with optional max rounds |
-| `cron` | Supports `@every 5m` and `*/N * * * *` expressions |
+| `cron` | Full cron scheduling via [robfig/cron](https://github.com/robfig/cron) |
+
+The `cron` mode accepts standard 5-field cron expressions (e.g. `0 */2 * * *`
+for every two hours), the `@every <duration>` form (e.g. `@every 90s`,
+`@every 1h30m`), and named descriptors (`@hourly`, `@daily`, `@weekly`,
+`@monthly`, `@yearly`). Invalid expressions are rejected at config load.
 
 ---
 

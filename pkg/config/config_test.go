@@ -250,6 +250,67 @@ func TestValidate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "scheduler empty mode",
+			mutate: func(c *Config) {
+				c.Scheduler.Mode = ""
+			},
+			wantErr: true,
+		},
+		{
+			name: "scheduler unknown mode",
+			mutate: func(c *Config) {
+				c.Scheduler.Mode = "hourly"
+			},
+			wantErr: true,
+		},
+		{
+			name: "scheduler continuous mode",
+			mutate: func(c *Config) {
+				c.Scheduler.Mode = "continuous"
+			},
+			wantErr: false,
+		},
+		{
+			name: "scheduler cron mode without expression",
+			mutate: func(c *Config) {
+				c.Scheduler.Mode = "cron"
+				c.Scheduler.CronExpression = ""
+			},
+			wantErr: true,
+		},
+		{
+			name: "scheduler cron mode with invalid expression",
+			mutate: func(c *Config) {
+				c.Scheduler.Mode = "cron"
+				c.Scheduler.CronExpression = "not a cron"
+			},
+			wantErr: true,
+		},
+		{
+			name: "scheduler cron mode with standard expression",
+			mutate: func(c *Config) {
+				c.Scheduler.Mode = "cron"
+				c.Scheduler.CronExpression = "0 */2 * * *"
+			},
+			wantErr: false,
+		},
+		{
+			name: "scheduler cron mode with @every expression",
+			mutate: func(c *Config) {
+				c.Scheduler.Mode = "cron"
+				c.Scheduler.CronExpression = "@every 90s"
+			},
+			wantErr: false,
+		},
+		{
+			name: "scheduler cron mode with descriptor",
+			mutate: func(c *Config) {
+				c.Scheduler.Mode = "cron"
+				c.Scheduler.CronExpression = "@daily"
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

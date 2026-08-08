@@ -6,6 +6,7 @@ require (
 	github.com/IBM/sarama v1.47.0
 	github.com/nats-io/nats.go v1.49.0
 	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/robfig/cron/v3 v3.0.1
 	google.golang.org/grpc v1.79.1
 	k8s.io/apimachinery v0.35.2
 	k8s.io/client-go v0.35.2

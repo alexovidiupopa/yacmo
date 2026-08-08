@@ -1,0 +1,49 @@
+{
+  "dry_run": true,
+  "log_level": "info",
+  "interval": 30000000000,
+
+  "safety": {
+    "enabled": true,
+    "fail_closed": true,
+    "require_approval": true,
+    "interactive_confirm": true,
+    "allow_destructive_actions": false,
+    "blocked_namespaces": ["kube-system", "kube-public"],
+    "blocked_name_patterns": ["^kube-.*", "^istio-.*", "^linkerd-.*"],
+    "max_targets_per_run": 20,
+    "max_destructive_actions_per_run": 8
+  },
+
+  "http": {
+    "enabled": true,
+    "targets": [
+      {
+        "name": "api-flood",
+        "url": "http://localhost:8080/api/health",
+        "method": "GET",
+        "concurrency": 10,
+        "total_requests": 1000,
+        "rate_per_second": 100,
+        "timeout_seconds": 5,
+        "duration": 60000000000
+      }
+    ]
+  },
+
+  "scheduler": {
+    "mode": "cron",
+    "cron_expression": "0 */2 * * *",
+    "max_experiments": 0
+  },
+
+  "metrics": {
+    "enabled": true,
+    "address": ":9090"
+  },
+
+  "report": {
+    "enabled": true,
+    "output_dir": "./reports"
+  }
+}
