@@ -1,0 +1,18 @@
+# Keep the build context small and reproducible.
+.git
+.github
+.idea
+.claude
+
+# Build artifacts / local output
+yacmo
+reports/
+*.out
+*.html
+coverage.*
+test-results.xml
+
+# Docs and examples aren't needed to build the binary.
+*.md
+report_examples/
+config_examples/

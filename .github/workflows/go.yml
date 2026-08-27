@@ -66,6 +66,38 @@ jobs:
           echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
           echo "Resolved version: ${version} (release=${is_release}, prerelease=${prerelease})"
 
+  # Static analysis: golangci-lint (config in .golangci.yml).
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+
+  # Dependency/vulnerability scanning — relevant for a security-adjacent tool.
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
   # Run the test suite and publish JUnit + coverage as retrievable artifacts.
   test:
     runs-on: ubuntu-latest
@@ -106,6 +138,15 @@ jobs:
             echo ""
             echo "Full JUnit results and the HTML coverage report are attached as build artifacts."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+          # Tokenless upload works for public repos; set CODECOV_TOKEN for private.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
       - name: Upload test results
         if: always()
@@ -165,9 +206,55 @@ jobs:
           path: yacmo-${{ needs.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
           if-no-files-found: error
 
+  # Build the container image and publish it to GHCR. Pull requests build the
+  # image to prove the Dockerfile is valid but do not push; everything else
+  # (master, release/** branches, v* tags) pushes tagged images.
+  docker:
+    needs: [ version, test ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ needs.version.outputs.version }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # Publish a GitHub Release (pre-release for release branches, full for tags).
   release:
-    needs: [ version, test, build ]
+    needs: [ version, lint, vuln, test, build ]
     if: needs.version.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     steps:

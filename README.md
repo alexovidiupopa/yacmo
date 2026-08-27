@@ -11,6 +11,11 @@
    ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝     ╚═╝ ╚═════╝
 ```
 
+[![CI/CD](https://github.com/alexovidiupopa/yacmo/actions/workflows/go.yml/badge.svg)](https://github.com/alexovidiupopa/yacmo/actions/workflows/go.yml)
+[![codecov](https://codecov.io/gh/alexovidiupopa/yacmo/branch/master/graph/badge.svg)](https://codecov.io/gh/alexovidiupopa/yacmo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/alexovidiupopa/yacmo)](https://goreportcard.com/report/github.com/alexovidiupopa/yacmo)
+[![Container image](https://img.shields.io/badge/ghcr.io-yacmo-blue?logo=docker)](https://github.com/alexovidiupopa/yacmo/pkgs/container/yacmo)
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -236,6 +241,33 @@ For a versioned build, stamp the version in via `-ldflags` (this is what CI does
 ```bash
 go build -ldflags "-X yacmo/pkg/version.Version=1.4.0" -o yacmo .
 ./yacmo -version   # YACMO 1.4.0 — Yet Another Chaos Monkey (...)
+```
+
+### Container image
+
+CI publishes a Linux image to the GitHub Container Registry on every push to
+`master` (`:latest` and `:<sha>`) and for each release (`:X.Y.Z`). The image is
+based on Alpine and ships `tc` (iproute2) and `iptables` so the network module
+works out of the box.
+
+```bash
+# Pull the latest published image
+docker pull ghcr.io/alexovidiupopa/yacmo:latest
+
+# Run in dry-run against a mounted config
+docker run --rm -v "$PWD/config.json:/work/config.json:ro" \
+  ghcr.io/alexovidiupopa/yacmo:latest -config config.json -dry-run
+
+# The network module needs elevated privileges (tc/iptables)
+docker run --rm --cap-add=NET_ADMIN \
+  -v "$PWD/config.json:/work/config.json:ro" \
+  ghcr.io/alexovidiupopa/yacmo:latest -config config.json
+```
+
+Build it yourself with the version stamped in via build args:
+
+```bash
+docker build -t yacmo:local --build-arg VERSION=1.4.0 .
 ```
 
 ### Releases
