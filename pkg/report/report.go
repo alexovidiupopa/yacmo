@@ -241,12 +241,12 @@ func writeHtml(report *Report) ([]byte, error) {
 	buf.WriteString("    <header>\n")
 	buf.WriteString("      <h1>🎯 YACMO Chaos Report</h1>\n")
 	buf.WriteString("      <div class=\"header-meta\">\n")
-	buf.WriteString(fmt.Sprintf("        <div class=\"meta-item\"><span class=\"meta-label\">Generated</span><span class=\"meta-value\">%s</span></div>\n",
-		report.GeneratedAt.Format("2006-01-02 15:04:05")))
-	buf.WriteString(fmt.Sprintf("        <div class=\"meta-item\"><span class=\"meta-label\">Total Duration</span><span class=\"meta-value\">%s</span></div>\n",
-		report.Duration))
-	buf.WriteString(fmt.Sprintf("        <div class=\"meta-item\"><span class=\"meta-label\">Version</span><span class=\"meta-value\">%s</span></div>\n",
-		report.Version))
+	fmt.Fprintf(&buf, "        <div class=\"meta-item\"><span class=\"meta-label\">Generated</span><span class=\"meta-value\">%s</span></div>\n",
+		report.GeneratedAt.Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(&buf, "        <div class=\"meta-item\"><span class=\"meta-label\">Total Duration</span><span class=\"meta-value\">%s</span></div>\n",
+		report.Duration)
+	fmt.Fprintf(&buf, "        <div class=\"meta-item\"><span class=\"meta-label\">Version</span><span class=\"meta-value\">%s</span></div>\n",
+		report.Version)
 	buf.WriteString("      </div>\n")
 	buf.WriteString("    </header>\n")
 
@@ -257,14 +257,14 @@ func writeHtml(report *Report) ([]byte, error) {
 
 	// Write summary cards
 	buf.WriteString("    <div class=\"summary\">\n")
-	buf.WriteString(fmt.Sprintf("      <div class=\"summary-card total\"><span class=\"summary-label\">Total</span><span class=\"summary-value\">%d</span></div>\n",
-		report.Summary.Total))
-	buf.WriteString(fmt.Sprintf("      <div class=\"summary-card success\"><span class=\"summary-label\">Succeeded</span><span class=\"summary-value\">%d</span></div>\n",
-		report.Summary.Succeeded))
-	buf.WriteString(fmt.Sprintf("      <div class=\"summary-card failed\"><span class=\"summary-label\">Failed</span><span class=\"summary-value\">%d</span></div>\n",
-		report.Summary.Failed))
-	buf.WriteString(fmt.Sprintf("      <div class=\"summary-card skipped\"><span class=\"summary-label\">Skipped</span><span class=\"summary-value\">%d</span></div>\n",
-		report.Summary.Skipped))
+	fmt.Fprintf(&buf, "      <div class=\"summary-card total\"><span class=\"summary-label\">Total</span><span class=\"summary-value\">%d</span></div>\n",
+		report.Summary.Total)
+	fmt.Fprintf(&buf, "      <div class=\"summary-card success\"><span class=\"summary-label\">Succeeded</span><span class=\"summary-value\">%d</span></div>\n",
+		report.Summary.Succeeded)
+	fmt.Fprintf(&buf, "      <div class=\"summary-card failed\"><span class=\"summary-label\">Failed</span><span class=\"summary-value\">%d</span></div>\n",
+		report.Summary.Failed)
+	fmt.Fprintf(&buf, "      <div class=\"summary-card skipped\"><span class=\"summary-label\">Skipped</span><span class=\"summary-value\">%d</span></div>\n",
+		report.Summary.Skipped)
 	buf.WriteString("    </div>\n")
 
 	// Write experiments table
@@ -286,26 +286,26 @@ func writeHtml(report *Report) ([]byte, error) {
 	// Write rows
 	for _, e := range report.Experiments {
 		buf.WriteString("          <tr>\n")
-		buf.WriteString(fmt.Sprintf("            <td><strong>%s</strong></td>\n", htmlEscape(e.Name)))
+		fmt.Fprintf(&buf, "            <td><strong>%s</strong></td>\n", htmlEscape(e.Name))
 
 		// Status badge
 		statusClass := "status-" + e.Status
-		buf.WriteString(fmt.Sprintf("            <td><span class=\"status-badge %s\">%s</span></td>\n",
-			statusClass, htmlEscape(e.Status)))
+		fmt.Fprintf(&buf, "            <td><span class=\"status-badge %s\">%s</span></td>\n",
+			statusClass, htmlEscape(e.Status))
 
-		buf.WriteString(fmt.Sprintf("            <td>%s</td>\n", e.StartedAt.Format("2006-01-02 15:04:05")))
-		buf.WriteString(fmt.Sprintf("            <td>%s</td>\n", htmlEscape(e.Duration)))
+		fmt.Fprintf(&buf, "            <td>%s</td>\n", e.StartedAt.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(&buf, "            <td>%s</td>\n", htmlEscape(e.Duration))
 
 		// Error cell
 		if e.Error != "" {
-			buf.WriteString(fmt.Sprintf("            <td><div class=\"error-text\">%s</div></td>\n", htmlEscape(e.Error)))
+			fmt.Fprintf(&buf, "            <td><div class=\"error-text\">%s</div></td>\n", htmlEscape(e.Error))
 		} else {
 			buf.WriteString("            <td></td>\n")
 		}
 
 		// Details cell
 		if e.Details != "" {
-			buf.WriteString(fmt.Sprintf("            <td><div class=\"details-text\">%s</div></td>\n", htmlEscape(e.Details)))
+			fmt.Fprintf(&buf, "            <td><div class=\"details-text\">%s</div></td>\n", htmlEscape(e.Details))
 		} else {
 			buf.WriteString("            <td></td>\n")
 		}

@@ -229,7 +229,7 @@ func (c *ChaosStress) stressDiskIO(ctx context.Context) error {
 			for {
 				select {
 				case <-ctx.Done():
-					os.Remove(path)
+					_ = os.Remove(path)
 					return
 				default:
 				}
@@ -271,7 +271,7 @@ func (c *ChaosStress) stressDiskFill(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create disk fill file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	chunk := make([]byte, 1024*1024) // 1 MB
 	rand.Read(chunk)

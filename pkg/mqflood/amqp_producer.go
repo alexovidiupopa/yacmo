@@ -37,7 +37,7 @@ func (p *AMQPProducer) Connect(_ context.Context) error {
 
 	p.ch, err = p.conn.Channel()
 	if err != nil {
-		p.conn.Close()
+		_ = p.conn.Close()
 		return fmt.Errorf("amqp channel: %w", err)
 	}
 
@@ -81,7 +81,7 @@ func (p *AMQPProducer) Publish(ctx context.Context, topic string, data []byte) e
 
 func (p *AMQPProducer) Close() error {
 	if p.ch != nil {
-		p.ch.Close()
+		_ = p.ch.Close()
 	}
 	if p.conn != nil {
 		return p.conn.Close()

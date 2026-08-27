@@ -1,0 +1,27 @@
+# golangci-lint configuration for YACMO.
+# Schema v2 (golangci-lint v2.x). Run locally with: golangci-lint run ./...
+version: "2"
+
+linters:
+  # Start from the default set (errcheck, govet, ineffassign, staticcheck,
+  # unused) and add a few high-signal linters that suit a security-adjacent
+  # single-binary tool.
+  default: standard
+  enable:
+    - bodyclose      # HTTP response bodies must be closed (we open many)
+    - unconvert      # flag redundant type conversions
+    - revive         # golint's successor: light style checks
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true   # not a public library; exported-doc noise not wanted
+
+  exclusions:
+    generated: lax
+    rules:
+      # Test files may skip a few checks that don't add value there.
+      - path: _test\.go
+        linters:
+          - bodyclose

@@ -19,6 +19,9 @@ not a server (though it can expose a Prometheus metrics endpoint while running).
 go build -o yacmo .        # build the binary
 go test -v ./...           # run tests (CI runs this; see note below)
 go vet ./...               # static checks
+golangci-lint run ./...    # lint (config in .golangci.yml; CI runs this)
+govulncheck ./...          # vulnerability scan (CI runs this)
+docker build -t yacmo .    # build the container image
 ./yacmo -config config_examples/config-dry-run.json   # run in dry-run
 ```
 
@@ -26,13 +29,15 @@ Common flags: `-config <path>` (default `config.json`), `-dry-run`, `-log-level
 debug|info|warn|error`, `-approve` (approve destructive actions), `-version`.
 
 CI/CD: [.github/workflows/go.yml](.github/workflows/go.yml) runs on push/PR to `master`,
-on `release/**` branches, and on `v*` tags. It cross-compiles versioned binaries
-(uploaded as artifacts) and runs the tests via `gotestsum`, publishing JUnit + coverage
-as artifacts and a coverage summary to the run's job summary. The build version is stamped
-into the binary via `-ldflags` into [pkg/version](pkg/version/version.go), so
-`yacmo -version` reflects the artefact. Pushing `release/X.Y.Z` produces an
-`X.Y.Z-rc.<run>` pre-release; pushing tag `vX.Y.Z` publishes a full GitHub Release with
-the binaries attached.
+on `release/**` branches, and on `v*` tags. It lints (`golangci-lint`), scans for
+vulnerabilities (`govulncheck`), cross-compiles versioned binaries (uploaded as
+artifacts), and runs the tests via `gotestsum` — publishing JUnit + coverage as artifacts,
+a coverage summary to the run's job summary, and uploading coverage to Codecov. It also
+builds the container image and pushes it to GHCR (`ghcr.io/<owner>/yacmo`) on non-PR runs.
+The build version is stamped into the binary via `-ldflags` into
+[pkg/version](pkg/version/version.go), so `yacmo -version` reflects the artefact. Pushing
+`release/X.Y.Z` produces an `X.Y.Z-rc.<run>` pre-release; pushing tag `vX.Y.Z` publishes a
+full GitHub Release with the binaries attached.
 
 > **Tests:** `config`, `safety`, `chaos`, `report`, `healthcheck`, `httpflood`, and
 > `logger` have unit tests (no external infra needed — HTTP paths use `httptest`). The
