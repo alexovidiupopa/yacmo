@@ -99,7 +99,7 @@ func (c *ChaosGRPC) flood(ctx context.Context, target config.GRPCTarget) (*Stats
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %s: %w", target.Address, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	var stats Stats
 

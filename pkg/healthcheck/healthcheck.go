@@ -139,7 +139,7 @@ func (c *Checker) probe(ctx context.Context, ep config.HealthEndpoint) Result {
 		r.Error = err.Error()
 		return r
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	r.StatusCode = resp.StatusCode
 

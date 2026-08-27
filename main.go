@@ -272,7 +272,7 @@ func main() {
 
 	// ── Shutdown metrics server ────────────────────────────────
 	if metricsSrv != nil {
-		metricsSrv.Shutdown(context.Background())
+		_ = metricsSrv.Shutdown(context.Background())
 	}
 
 	log.Info("YACMO finished. Goodbye! 🐒")

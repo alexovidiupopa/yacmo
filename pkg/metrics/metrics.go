@@ -73,10 +73,10 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	counters, gauges := c.Snapshot()
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	for name, val := range counters {
-		fmt.Fprintf(w, "# TYPE %s counter\n%s %d\n", name, name, val)
+		_, _ = fmt.Fprintf(w, "# TYPE %s counter\n%s %d\n", name, name, val)
 	}
 	for name, val := range gauges {
-		fmt.Fprintf(w, "# TYPE %s gauge\n%s %f\n", name, name, val)
+		_, _ = fmt.Fprintf(w, "# TYPE %s gauge\n%s %f\n", name, name, val)
 	}
 }
 
@@ -94,7 +94,7 @@ func NewServer(addr string, collector *Collector, log *logger.Logger) *Server {
 	mux.Handle("/metrics", collector)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 
 	return &Server{

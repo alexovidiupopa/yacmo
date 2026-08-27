@@ -122,7 +122,7 @@ func (n *Notifier) send(ctx context.Context, wh config.WebhookTarget, payload Pa
 	if err != nil {
 		return fmt.Errorf("send webhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("webhook returned HTTP %d", resp.StatusCode)

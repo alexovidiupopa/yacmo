@@ -99,7 +99,7 @@ func TestWriteCSV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open csv: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	rows, err := csv.NewReader(f).ReadAll()
 	if err != nil {

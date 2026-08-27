@@ -177,8 +177,8 @@ func (c *ChaosHTTP) flood(ctx context.Context, target config.HTTPTarget) (*Stats
 					continue
 				}
 				// Drain and close body
-				io.Copy(io.Discard, resp.Body)
-				resp.Body.Close()
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
 
 				if resp.StatusCode >= 400 {
 					atomic.AddInt64(&stats.ErrorCount, 1)
